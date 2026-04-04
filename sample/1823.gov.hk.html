@@ -20,6 +20,7 @@
                 // 或者自己 loop 顯示成表格
             } catch (error) {
                 console.error('攞資料出事：', error);
+                document.getElementById('result').innerHTML = 'ERROR: ' + err.message;
             }
         }
 
