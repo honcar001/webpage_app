@@ -7,7 +7,7 @@ not ok due to no CORS:
 https://www.1823.gov.hk/common/ical/tc.json
 
 ok:
-https://www.hko.gov.hk/en/weatherAPI/doc/files/HKO_Open_Data_API_Documentation.pdf
+https://data.weather.gov.hk/weatherAPI/opendata/lunardate.php?date=2023
 CORS: 
 access-control-allow-headers
 	Origin, Content-Type, X-Auth-Token
@@ -15,3 +15,6 @@ access-control-allow-methods
 	GET
 access-control-allow-origin
 	*
+
+API reference doc:
+https://www.hko.gov.hk/en/weatherAPI/doc/files/HKO_Open_Data_API_Documentation.pdf
