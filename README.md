@@ -21,3 +21,14 @@ https://www.hko.gov.hk/en/weatherAPI/doc/files/HKO_Open_Data_API_Documentation.p
 
 OK: 學校位置地理參考數據及其他相關資料
 https://www.edb.gov.hk/attachment/en/student-parents/sch-info/sch-search/sch-location-info/SCH_LOC_EDB.json
+
+KMB OK:
+webpage:
+https://data.gov.hk/tc-data/dataset/hk-td-tis_21-etakmb
+
+巴士站列表數據
+https://data.etabus.gov.hk/v1/transport/kmb/stop
+預計到達時間數據(巴士站)
+https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stop_id}
+例如東京街站:
+https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/76D5C1E2B23E8743
