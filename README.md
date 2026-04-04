@@ -18,3 +18,6 @@ access-control-allow-origin
 
 API reference doc:
 https://www.hko.gov.hk/en/weatherAPI/doc/files/HKO_Open_Data_API_Documentation.pdf
+
+OK: 學校位置地理參考數據及其他相關資料
+https://www.edb.gov.hk/attachment/en/student-parents/sch-info/sch-search/sch-location-info/SCH_LOC_EDB.json
