@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>土瓜灣街市 巴士實時到站</title>
+    <title>土瓜灣街市 (KC728) 巴士實時到站</title>
     <style>
         body { 
             font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; 
@@ -12,11 +12,11 @@
             padding: 15px; 
         }
         .container { 
-            max-width: 900px; 
+            max-width: 920px; 
             margin: 0 auto; 
             background: white; 
             border-radius: 10px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
             overflow: hidden; 
         }
         header { 
@@ -25,8 +25,8 @@
             padding: 20px; 
             text-align: center; 
         }
-        h1 { margin: 0; font-size: 1.6em; }
-        .subtitle { font-size: 1.15em; margin: 8px 0 0; opacity: 0.95; }
+        h1 { margin: 0; font-size: 1.65em; }
+        .subtitle { font-size: 1.2em; margin: 8px 0 0; opacity: 0.95; }
         .controls { 
             padding: 15px; 
             text-align: center; 
@@ -34,7 +34,7 @@
             border-bottom: 1px solid #eee;
         }
         button { 
-            padding: 12px 28px; 
+            padding: 12px 30px; 
             font-size: 17px; 
             background: #0066cc; 
             color: white; 
@@ -58,7 +58,7 @@
             background: #e6f0ff; 
             padding: 12px 15px; 
             font-weight: bold; 
-            font-size: 1.15em; 
+            font-size: 1.2em; 
             color: #0066cc;
         }
         .eta-item { 
@@ -69,26 +69,29 @@
             align-items: center; 
         }
         .bus-no { 
-            font-size: 1.4em; 
+            font-size: 1.45em; 
             font-weight: bold; 
             color: #0066cc; 
-            min-width: 70px; 
+            min-width: 75px; 
         }
         .dest { 
             flex: 1; 
             color: #222; 
-            padding: 0 10px; 
+            padding: 0 12px; 
         }
         .time { 
             text-align: right; 
-            font-size: 1.25em; 
+            font-size: 1.3em; 
             font-weight: bold; 
             color: #d32f2f; 
-            min-width: 110px; 
+            min-width: 120px; 
         }
-        .min { font-size: 0.92em; color: #666; }
+        .min { font-size: 0.95em; color: #666; }
         .remark { font-size: 0.88em; color: #777; margin-top: 5px; }
-        .highlight { background: #fff8e1; border-left: 6px solid #ff9800; }
+        .highlight { 
+            background: #fff8e1; 
+            border-left: 6px solid #ff9800; 
+        }
         .no-data { text-align: center; padding: 40px; color: #888; font-size: 1.1em; }
         footer { 
             text-align: center; 
@@ -102,8 +105,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>土瓜灣街市 巴士實時到站</h1>
-            <p class="subtitle">路線 107、108（往港島方向）及其他九巴</p>
+            <h1>土瓜灣街市 (KC728) 巴士實時到站</h1>
+            <p class="subtitle">107、108（往港島方向）重點顯示</p>
         </header>
 
         <div class="controls">
@@ -117,12 +120,12 @@
 
         <footer>
             資料來源：九巴 eTAMS 實時資料 • 每30秒自動更新<br>
-            僅供參考，實際到站時間以巴士公司為準
+            土瓜灣街市 (KC728) • 僅供參考，實際以巴士公司為準
         </footer>
     </div>
 
     <script>
-        const stopId = "7F864B82461F638D";   // 土瓜灣街市（正確 stop_id）
+        const stopId = "E798CB4E2C777782";   // 土瓜灣街市 (KC728) - 正確的站
         const targetRoutes = ["107", "108"];
 
         async function fetchETA() {
@@ -149,66 +152,73 @@
                     grouped[route].push(item);
                 });
 
-                Object.keys(grouped).sort().forEach(route => {
-                    const etas = grouped[route];
-                    const isTarget = targetRoutes.includes(route);
-                    
-                    html += `
-                        <div class="route ${isTarget ? 'highlight' : ''}">
-                            <div class="route-header">
-                                🚍 路線 ${route} ${isTarget ? '（往港島方向 • 重點顯示）' : ''}
-                            </div>`;
-                    
-                    etas.forEach(eta => {
-                        let timeStr = "暫無資料";
-                        let minStr = "";
-                        
-                        if (eta.eta) {
-                            const etaTime = new Date(eta.eta);
-                            const now = new Date();
-                            let diffMin = Math.round((etaTime - now) / 60000);
-                            
-                            timeStr = etaTime.toLocaleTimeString('zh-HK', {hour:'2-digit', minute:'2-digit'});
-                            
-                            if (diffMin > 0) {
-                                minStr = `<span class="min">（約 ${diffMin} 分鐘）</span>`;
-                            } else if (diffMin > -2) {
-                                minStr = `<span class="min" style="color:#d32f2f;">（即將到達）</span>`;
-                            } else {
-                                minStr = `<span class="min">（已過站）</span>`;
-                            }
-                        }
-                        
-                        const dest = eta.dest_tc || "未知目的地";
-                        const remark = eta.remark_tc ? `<div class="remark">備註：${eta.remark_tc}</div>` : "";
-                        
-                        html += `
-                            <div class="eta-item">
-                                <div class="bus-no">${route}</div>
-                                <div class="dest">${dest}</div>
-                                <div class="time">${timeStr} ${minStr}</div>
-                            </div>
-                            ${remark}
-                        `;
-                    });
-                    html += `</div>`;
+                // 先顯示 107 和 108
+                targetRoutes.forEach(route => {
+                    if (grouped[route]) {
+                        html += createRouteHTML(route, grouped[route], true);
+                        delete grouped[route];
+                    }
                 });
 
-                container.innerHTML = html;
+                // 再顯示其他路線
+                Object.keys(grouped).sort().forEach(route => {
+                    html += createRouteHTML(route, grouped[route], false);
+                });
+
+                container.innerHTML = html || "<div class='no-data'>暫無到站資料</div>";
                 
                 const now = new Date();
                 updateEl.textContent = `上次更新：${now.toLocaleString('zh-HK')}（每30秒自動更新）`;
                 
             } catch (err) {
                 console.error(err);
-                container.innerHTML = `<div class='no-data'>無法連線到九巴資料庫<br>請檢查網絡後點擊「立即刷新」再試</div>`;
+                container.innerHTML = `<div class='no-data'>無法取得資料<br>請檢查網絡後點擊「立即刷新」</div>`;
             }
         }
 
-        // 頁面載入後自動執行
+        function createRouteHTML(route, etas, isTarget) {
+            let html = `
+                <div class="route ${isTarget ? 'highlight' : ''}">
+                    <div class="route-header">
+                        🚍 路線 ${route} ${isTarget ? '（往港島方向 • 重點顯示）' : ''}
+                    </div>`;
+            
+            etas.forEach(eta => {
+                let timeStr = "暫無資料";
+                let minStr = "";
+                
+                if (eta.eta) {
+                    const etaTime = new Date(eta.eta);
+                    const now = new Date();
+                    let diffMin = Math.round((etaTime - now) / 60000);
+                    
+                    timeStr = etaTime.toLocaleTimeString('zh-HK', {hour:'2-digit', minute:'2-digit'});
+                    
+                    if (diffMin > 0) minStr = `<span class="min">（約 ${diffMin} 分鐘）</span>`;
+                    else if (diffMin > -3) minStr = `<span class="min" style="color:#d32f2f;">（即將到達）</span>`;
+                    else minStr = `<span class="min">（已過站）</span>`;
+                }
+                
+                const dest = eta.dest_tc || "未知目的地";
+                const remark = eta.remark_tc ? `<div class="remark">備註：${eta.remark_tc}</div>` : "";
+                
+                html += `
+                    <div class="eta-item">
+                        <div class="bus-no">${route}</div>
+                        <div class="dest">${dest}</div>
+                        <div class="time">${timeStr} ${minStr}</div>
+                    </div>
+                    ${remark}
+                `;
+            });
+            
+            html += `</div>`;
+            return html;
+        }
+
         window.onload = () => {
             fetchETA();
-            setInterval(fetchETA, 30000);   // 每30秒自動刷新
+            setInterval(fetchETA, 30000);
         };
     </script>
 </body>
