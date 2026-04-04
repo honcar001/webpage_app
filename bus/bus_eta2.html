@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>巴士到站預報</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f4f9; margin: 0; padding: 10px; font-size: 14px; height: 100vh; overflow: hidden; box-sizing: border-box; }
+        .container { display: flex; gap: 8px; height: calc(100% - 40px); }
+        .column { flex: 1; background: #fff; border-radius: 8px; padding: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        h2 { font-size: 1.1rem; margin: 0 0 8px 0; color: #d32f2f; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 4px; }
+        .refresh-btn { width: 100%; padding: 8px; background: #1976d2; color: white; border: none; border-radius: 5px; font-weight: bold; margin-bottom: 10px; cursor: pointer; }
+        .refresh-btn:active { background: #1565c0; }
+        .group { margin-bottom: 10px; flex-shrink: 0; }
+        .station-name { font-weight: bold; color: #555; font-size: 0.85rem; background: #e3f2fd; padding: 2px 5px; border-left: 3px solid #1976d2; margin-bottom: 4px; }
+        .eta-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; }
+        .route { font-weight: bold; color: #e65100; width: 35px; }
+        .time { color: #333; flex-grow: 1; text-align: right; }
+        .loading { text-align: center; color: #888; font-size: 0.8rem; margin-top: 10px; }
+        .scroll-area { overflow-y: auto; flex-grow: 1; }
+    </style>
+</head>
+<body>
+
+<button class="refresh-btn" onclick="fetchAllETA()">🔄 刷新時間</button>
+
+<div class="container">
+    <div class="column">
+        <h2>返工 (往港島)</h2>
+        <div id="work-list" class="scroll-area">
+            <div class="loading">載入中...</div>
+        </div>
+    </div>
+
+    <div class="column">
+        <h2>放工 (往九龍)</h2>
+        <div id="home-list" class="scroll-area">
+            <div class="loading">載入中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 設定資料
+    const config = {
+        work: {
+            stations: ["土瓜灣街市"],
+            routes: ["107", "108"]
+        },
+        home: {
+            stations: ["景隆街", "怡和街"],
+            routes: ["106", "108", "116"]
+        }
+    };
+
+    // 儲存 Stop ID 映射，避免重複獲取
+    let stopCache = [];
+
+    async function initStopCache() {
+        try {
+            const resp = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop');
+            const data = await resp.json();
+            stopCache = data.data;
+        } catch (e) {
+            console.error("無法獲取巴士站列表", e);
+        }
+    }
+
+    async function getETA(stopId, targetRoutes) {
+        try {
+            const resp = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+            const data = await resp.json();
+            // 過濾路線並只取近 3 班
+            return data.data.filter(item => targetRoutes.includes(item.route));
+        } catch (e) {
+            return [];
+        }
+    }
+
+    async function renderColumn(type, elementId) {
+        const listEl = document.getElementById(elementId);
+        listEl.innerHTML = '<div class="loading">更新中...</div>';
+        
+        const settings = config[type];
+        // 找出匹配站名的 Stop IDs
+        const matchedStops = stopCache.filter(s => settings.stations.some(name => s.name_tc.includes(name)));
+        
+        let allEta = [];
+        for (let stop of matchedStops) {
+            const etas = await getETA(stop.stop, settings.routes);
+            etas.forEach(e => {
+                allEta.push({
+                    route: e.route,
+                    dest: e.dest_tc,
+                    time: e.eta ? new Date(e.eta).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--',
+                    rawTime: e.eta,
+                    seq: e.eta_seq,
+                    stopName: stop.name_tc
+                });
+            });
+        }
+
+        // 排序：先按路線，再按時間
+        allEta.sort((a, b) => (a.rawTime > b.rawTime) ? 1 : -1);
+
+        if (allEta.length === 0) {
+            listEl.innerHTML = '<div class="loading">暫無資料</div>';
+            return;
+        }
+
+        let html = '';
+        // 按車站分組顯示
+        settings.stations.forEach(sName => {
+            const stationData = allEta.filter(item => item.stopName.includes(sName));
+            if (stationData.length > 0) {
+                html += `<div class="group"><div class="station-name">${sName}</div>`;
+                stationData.slice(0, 8).forEach(item => { // 限制數量防止過長
+                    html += `
+                        <div class="eta-item">
+                            <span class="route">${item.route}</span>
+                            <span class="time">${item.time} (${item.dest})</span>
+                        </div>`;
+                });
+                html += `</div>`;
+            }
+        });
+        listEl.innerHTML = html;
+    }
+
+    async function fetchAllETA() {
+        if (stopCache.length === 0) await initStopCache();
+        renderColumn('work', 'work-list');
+        renderColumn('home', 'home-list');
+    }
+
+    // 初始載入
+    fetchAllETA();
+    // 每 60 秒自動刷新
+    setInterval(fetchAllETA, 60000);
+</script>
+
+</body>
+</html>
