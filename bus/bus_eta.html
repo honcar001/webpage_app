@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>土瓜灣街市 巴士實時到站</title>
+    <style>
+        body { 
+            font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; 
+            background: #f4f4f4; 
+            margin: 0; 
+            padding: 15px; 
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            overflow: hidden; 
+        }
+        header { 
+            background: linear-gradient(135deg, #0066cc, #003399); 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+        }
+        h1 { margin: 0; font-size: 1.6em; }
+        .subtitle { font-size: 1.15em; margin: 8px 0 0; opacity: 0.95; }
+        .controls { 
+            padding: 15px; 
+            text-align: center; 
+            background: #f9f9f9; 
+            border-bottom: 1px solid #eee;
+        }
+        button { 
+            padding: 12px 28px; 
+            font-size: 17px; 
+            background: #0066cc; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+        }
+        button:hover { background: #0055aa; }
+        .last-update { 
+            font-size: 0.9em; 
+            color: #555; 
+            margin-top: 8px; 
+        }
+        .route { 
+            margin: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            overflow: hidden; 
+        }
+        .route-header { 
+            background: #e6f0ff; 
+            padding: 12px 15px; 
+            font-weight: bold; 
+            font-size: 1.15em; 
+            color: #0066cc;
+        }
+        .eta-item { 
+            padding: 14px 15px; 
+            border-top: 1px solid #eee; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .bus-no { 
+            font-size: 1.4em; 
+            font-weight: bold; 
+            color: #0066cc; 
+            min-width: 70px; 
+        }
+        .dest { 
+            flex: 1; 
+            color: #222; 
+            padding: 0 10px; 
+        }
+        .time { 
+            text-align: right; 
+            font-size: 1.25em; 
+            font-weight: bold; 
+            color: #d32f2f; 
+            min-width: 110px; 
+        }
+        .min { font-size: 0.92em; color: #666; }
+        .remark { font-size: 0.88em; color: #777; margin-top: 5px; }
+        .highlight { background: #fff8e1; border-left: 6px solid #ff9800; }
+        .no-data { text-align: center; padding: 40px; color: #888; font-size: 1.1em; }
+        footer { 
+            text-align: center; 
+            padding: 15px; 
+            font-size: 0.85em; 
+            color: #777; 
+            background: #fafafa; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>土瓜灣街市 巴士實時到站</h1>
+            <p class="subtitle">路線 107、108（往港島方向）及其他九巴</p>
+        </header>
+
+        <div class="controls">
+            <button onclick="fetchETA()">🔄 立即刷新</button>
+            <div class="last-update" id="last-update">上次更新：載入中...</div>
+        </div>
+
+        <div id="eta-container">
+            <!-- 資料會由 JavaScript 動態插入 -->
+        </div>
+
+        <footer>
+            資料來源：九巴 eTAMS 實時資料 • 每30秒自動更新<br>
+            僅供參考，實際到站時間以巴士公司為準
+        </footer>
+    </div>
+
+    <script>
+        const stopId = "7F864B82461F638D";   // 土瓜灣街市（正確 stop_id）
+        const targetRoutes = ["107", "108"];
+
+        async function fetchETA() {
+            const container = document.getElementById("eta-container");
+            const updateEl = document.getElementById("last-update");
+            
+            container.innerHTML = "<div class='no-data'>正在獲取最新巴士到站資料...</div>";
+            
+            try {
+                const response = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+                const result = await response.json();
+                
+                if (!result.data || result.data.length === 0) {
+                    container.innerHTML = "<div class='no-data'>目前沒有巴士到站資料，請稍後再試。</div>";
+                    return;
+                }
+
+                let html = "";
+                const grouped = {};
+
+                result.data.forEach(item => {
+                    const route = item.route;
+                    if (!grouped[route]) grouped[route] = [];
+                    grouped[route].push(item);
+                });
+
+                Object.keys(grouped).sort().forEach(route => {
+                    const etas = grouped[route];
+                    const isTarget = targetRoutes.includes(route);
+                    
+                    html += `
+                        <div class="route ${isTarget ? 'highlight' : ''}">
+                            <div class="route-header">
+                                🚍 路線 ${route} ${isTarget ? '（往港島方向 • 重點顯示）' : ''}
+                            </div>`;
+                    
+                    etas.forEach(eta => {
+                        let timeStr = "暫無資料";
+                        let minStr = "";
+                        
+                        if (eta.eta) {
+                            const etaTime = new Date(eta.eta);
+                            const now = new Date();
+                            let diffMin = Math.round((etaTime - now) / 60000);
+                            
+                            timeStr = etaTime.toLocaleTimeString('zh-HK', {hour:'2-digit', minute:'2-digit'});
+                            
+                            if (diffMin > 0) {
+                                minStr = `<span class="min">（約 ${diffMin} 分鐘）</span>`;
+                            } else if (diffMin > -2) {
+                                minStr = `<span class="min" style="color:#d32f2f;">（即將到達）</span>`;
+                            } else {
+                                minStr = `<span class="min">（已過站）</span>`;
+                            }
+                        }
+                        
+                        const dest = eta.dest_tc || "未知目的地";
+                        const remark = eta.remark_tc ? `<div class="remark">備註：${eta.remark_tc}</div>` : "";
+                        
+                        html += `
+                            <div class="eta-item">
+                                <div class="bus-no">${route}</div>
+                                <div class="dest">${dest}</div>
+                                <div class="time">${timeStr} ${minStr}</div>
+                            </div>
+                            ${remark}
+                        `;
+                    });
+                    html += `</div>`;
+                });
+
+                container.innerHTML = html;
+                
+                const now = new Date();
+                updateEl.textContent = `上次更新：${now.toLocaleString('zh-HK')}（每30秒自動更新）`;
+                
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div class='no-data'>無法連線到九巴資料庫<br>請檢查網絡後點擊「立即刷新」再試</div>`;
+            }
+        }
+
+        // 頁面載入後自動執行
+        window.onload = () => {
+            fetchETA();
+            setInterval(fetchETA, 30000);   // 每30秒自動刷新
+        };
+    </script>
+</body>
+</html>
