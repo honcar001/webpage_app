@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <title>DATA.GOV.HK 資料顯示</title>
+</head>
+<body>
+    <h1>例如：今日公眾假期</h1>
+    <div id="result"></div>
+
+    <script>
+        async function fetchData() {
+            try {
+                // 舉例：公眾假期資料集 API（要換成你搵到嘅真實 API 連結）
+                const response = await fetch('https://www.1823.gov.hk/common/ical/tc.json');
+                
+                const data = await response.json();
+                document.getElementById('result').innerHTML = JSON.stringify(data, null, 2);
+                
+                // 或者自己 loop 顯示成表格
+            } catch (error) {
+                console.error('攞資料出事：', error);
+            }
+        }
+
+        alert('test2');
+        fetchData();
+    </script>
+</body>
+</html>
