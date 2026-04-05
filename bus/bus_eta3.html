@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>巴士到站時間</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f5f5f5; }
+    .container { display: flex; gap: 10px; }
+    .column { flex: 1; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    h2 { margin: 0 0 8px 0; font-size: 16px; }
+    .route { margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+    .eta { font-size: 14px; }
+    button { width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px; border: none; border-radius: 8px; background: #007bff; color: white; }
+    .updating { font-size: 12px; color: #888; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+<button onclick="loadData()">Refresh</button>
+
+<div class="container">
+  <div class="column">
+    <h2>返工 (往港島)</h2>
+    <div class="updating" id="workStatus"></div>
+    <div id="work"></div>
+  </div>
+  <div class="column">
+    <h2>放工 (往九龍)</h2>
+    <div class="updating" id="homeStatus"></div>
+    <div id="home"></div>
+  </div>
+</div>
+
+<script>
+const STOP_API = 'https://data.etabus.gov.hk/v1/transport/kmb/stop';
+const ETA_API = 'https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/';
+
+const config = {
+  work: [
+    { name: '土瓜灣街市', routes: ['107','108'], dir: 'I' } // 往港島
+  ],
+  home: [
+    { name: '景隆街', routes: ['106'], dir: 'O' }, // 往九龍
+    { name: '怡和街', routes: ['108','116'], dir: 'O' }
+  ]
+};
+
+let allStopsCache = null;
+
+async function fetchStops() {
+  if (allStopsCache) return allStopsCache;
+  const res = await fetch(STOP_API);
+  const data = await res.json();
+  allStopsCache = data.data;
+  return allStopsCache;
+}
+
+function findStopsByName(stops, name) {
+  return stops.filter(s => s.name_tc.includes(name));
+}
+
+async function fetchETA(stopId) {
+  const res = await fetch(ETA_API + stopId);
+  const data = await res.json();
+  return data.data;
+}
+
+function formatTime(eta) {
+  if (!eta) return null;
+  const diff = (new Date(eta) - new Date()) / 60000;
+  return diff > 0 ? Math.round(diff) + ' 分鐘' : '即將到達';
+}
+
+async function getCombinedETAs(stops, name, routes, dir) {
+  const matchedStops = findStopsByName(stops, name);
+
+  const results = await Promise.all(matchedStops.map(s => fetchETA(s.stop)));
+
+  let combined = [];
+  results.forEach(r => combined.push(...r));
+
+    // 🔥 改良：先試嚴格 filter（方向），如果無資料 → fallback
+  let filteredAll = combined.filter(e =>
+    routes.includes(e.route) &&
+    e.eta &&
+    e.dir === dir
+  );
+
+  // 👉 fallback：如果完全無，放寬方向限制
+  if (filteredAll.length === 0) {
+    filteredAll = combined.filter(e =>
+      routes.includes(e.route) &&
+      e.eta
+    );
+  }
+
+  // 如果仍然無資料
+  if (filteredAll.length === 0) return null;
+
+  return routes.reduce((acc, route) => {
+    const routeEtas = filteredAll
+      .filter(e => e.route === route)
+      .sort((a,b) => new Date(a.eta) - new Date(b.eta))
+      .slice(0,2)
+      .map(e => formatTime(e.eta));
+
+    acc[route] = routeEtas;
+    return acc;
+  }, {});
+}
+
+async function renderSection(containerId, statusId, items, stops) {
+  const container = document.getElementById(containerId);
+  const status = document.getElementById(statusId);
+
+  status.innerText = '更新中...';
+
+  let html = '';
+
+  for (let item of items) {
+    const etaData = await getCombinedETAs(stops, item.name, item.routes, item.dir);
+
+    html += `<div class="route"><strong>${item.name}</strong>`;
+
+    item.routes.forEach(route => {
+      const times = etaData ? etaData[route] : null;
+      html += `<div class="eta">${route}: ${times && times.length ? times.join(', ') : '無資料'}</div>`;
+    });
+
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+  status.innerText = '已更新: ' + new Date().toLocaleTimeString();
+}
+
+async function loadData() {
+  const stops = await fetchStops();
+
+  renderSection('work','workStatus', config.work, stops);
+  renderSection('home','homeStatus', config.home, stops);
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
