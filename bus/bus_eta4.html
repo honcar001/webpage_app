@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>KMB ETA Dashboard</title>
+  <title>KMB + 城巴 ETA Dashboard</title>
   <style>
     :root{
       --bg:#08111f;
@@ -13,6 +13,8 @@
       --muted:#93a2c7;
       --good:#36d399;
       --accent:#6ea8fe;
+      --ctb:#ffb020;
+      --kmb:#4f8cff;
     }
     *{box-sizing:border-box}
     body{
@@ -118,6 +120,8 @@
       color:#dce8ff;
       font-weight:800;
     }
+    .badge.kmb{background:rgba(79,140,255,.18); color:#9fc0ff}
+    .badge.ctb{background:rgba(255,176,32,.18); color:#ffd58b}
     .etas{color:var(--good);font-weight:800}
     .foot{
       color:var(--muted);
@@ -134,7 +138,7 @@
   <div class="app">
     <div class="topbar">
       <div>
-        <div class="title">KMB 實時 ETA</div>
+        <div class="title">KMB + 城巴 實時 ETA</div>
         <div class="meta" id="status">載入中...</div>
       </div>
       <button id="refreshBtn">Refresh</button>
@@ -143,34 +147,39 @@
     <div class="grid">
       <section class="panel">
         <h2>返工（往港島）</h2>
-        <div class="sub">土瓜灣街市 · 107 / 108</div>
+        <div class="sub">土瓜灣街市</div>
         <div class="group" id="workList"></div>
       </section>
 
       <section class="panel">
         <h2>放工（往九龍）</h2>
-        <div class="sub">景隆街 · 106；怡和街 · 108 / 116</div>
+        <div class="sub">景隆街 · 怡和街</div>
         <div class="group" id="homeList"></div>
       </section>
     </div>
 
-    <div class="foot">資料來源：KMB open data stop / stop-eta</div>
+    <div class="foot">KMB: data.etabus.gov.hk｜城巴: rt.data.gov.hk / DATA.GOV.HK</div>
   </div>
 
 <script>
-const API = "https://data.etabus.gov.hk/v1/transport/kmb";
+const KMB_API = "https://data.etabus.gov.hk/v1/transport/kmb";
+const CTB_API = "https://rt.data.gov.hk/v2/transport/citybus";
 
 const config = {
   work: [
-    { name: "土瓜灣街市", aliases: ["土瓜灣街市", "To Kwa Wan Market"], routes: ["107", "108"] }
+    { company: "KMB", name: "土瓜灣街市", aliases: ["土瓜灣街市", "To Kwa Wan Market"], routes: ["107", "108"] }
   ],
   home: [
-    { name: "景隆街", aliases: ["景隆街", "Cannon Street"], routes: ["106"] },
-    { name: "怡和街", aliases: ["怡和街", "Jardine's Crescent"], routes: ["108", "116"] }
+    { company: "KMB", name: "景隆街", aliases: ["景隆街", "Cannon Street"], routes: ["106"] },
+    { company: "KMB", name: "怡和街", aliases: ["怡和街", "Jardine's Crescent"], routes: ["108", "116"] },
+
+    { company: "CTB", name: "景隆街", aliases: ["景隆街", "Cannon Street"], routes: ["6", "6X", "66"] },
+    { company: "CTB", name: "怡和街", aliases: ["怡和街", "Jardine's Crescent"], routes: ["2A", "2X", "8", "10", "5B", "15"] }
   ]
 };
 
-let stopCache = null;
+let kmbStopsCache = null;
+let ctbStopsCache = null;
 
 async function fetchJSON(url){
   const res = await fetch(url);
@@ -192,11 +201,18 @@ function fmtEta(eta){
   return `${diff} 分鐘`;
 }
 
-async function loadStops(){
-  if (stopCache) return stopCache;
-  const data = await fetchJSON(`${API}/stop`);
-  stopCache = data.data || data;
-  return stopCache;
+async function loadKmbStops(){
+  if (kmbStopsCache) return kmbStopsCache;
+  const data = await fetchJSON(`${KMB_API}/stop`);
+  kmbStopsCache = data.data || data;
+  return kmbStopsCache;
+}
+
+async function loadCtbStops(){
+  if (ctbStopsCache) return ctbStopsCache;
+  const data = await fetchJSON(`${CTB_API}/stop`);
+  ctbStopsCache = data.data || data;
+  return ctbStopsCache;
 }
 
 function matchStop(stop, aliases){
@@ -208,22 +224,37 @@ function matchStop(stop, aliases){
   });
 }
 
-async function findStopsByAliases(aliases){
-  const stops = await loadStops();
+async function findStops(company, aliases){
+  const stops = company === "CTB" ? await loadCtbStops() : await loadKmbStops();
   const found = stops.filter(s => matchStop(s, aliases));
   const uniq = new Map();
   for (const s of found) uniq.set(s.stop, s);
   return [...uniq.values()];
 }
 
-async function loadETAs(stopId, routes){
-  const data = await fetchJSON(`${API}/stop-eta/${stopId}`);
+async function loadKmbETAs(stopId, routes){
+  const data = await fetchJSON(`${KMB_API}/stop-eta/${stopId}`);
   const rows = data.data || data;
-  const wanted = rows.filter(r => routes.includes(String(r.route).trim()));
+  return processRows(rows, routes);
+}
 
+async function loadCtbETAs(stopId, routes){
+  const results = [];
+  for (const route of routes) {
+    const data = await fetchJSON(`${CTB_API}/eta/CTB/${stopId}/${route}`);
+    const rows = data.data || data;
+    for (const r of rows) results.push(r);
+  }
+  return processRows(results, routes, true);
+}
+
+function processRows(rows, routes, isCtb=false){
+  const wanted = rows.filter(r => routes.includes(String(r.route).trim()) || routes.includes(String(r.route_name || "").trim()));
   const byRoute = new Map();
+
   for (const r of wanted) {
-    const route = String(r.route).trim();
+    const route = String(r.route || r.route_name || "").trim();
+    if (!route) continue;
     if (!byRoute.has(route)) byRoute.set(route, []);
     byRoute.get(route).push(r);
   }
@@ -231,17 +262,26 @@ async function loadETAs(stopId, routes){
   for (const [route, arr] of byRoute.entries()) {
     const seen = new Set();
     const deduped = [];
-    arr.sort((a,b) => new Date(a.eta) - new Date(b.eta));
+    arr.sort((a,b) => new Date(aeta(a)) - new Date(aeta(b)));
     for (const r of arr) {
-      const key = r.eta || "";
+      const key = aeta(r) || "";
       if (seen.has(key)) continue;
       seen.add(key);
       deduped.push(r);
     }
-    byRoute.set(route, deduped.slice(0, 2));
+    byRoute.set(route, deduped.slice(0,2));
   }
 
   return byRoute;
+
+  function aeta(r){
+    return r.eta || r.arrivalTime || r.data_time || r.express_eta || r.estimatedArrivalTime;
+  }
+}
+
+function etaText(r){
+  const t = r.eta || r.arrivalTime || r.data_time || r.express_eta || r.estimatedArrivalTime;
+  return fmtEta(t);
 }
 
 async function renderGroup(containerId, group){
@@ -249,18 +289,21 @@ async function renderGroup(containerId, group){
   el.innerHTML = "";
 
   for (const item of group) {
-    const stops = await findStopsByAliases(item.aliases);
+    const stops = await findStops(item.company, item.aliases);
 
-    const renderStops = [];
     for (const stop of stops) {
-      const byRoute = await loadETAs(stop.stop, item.routes);
-      const hasAny = [...byRoute.values()].some(arr => arr.length > 0);
-      if (hasAny) renderStops.push({ stop, byRoute });
-    }
+      let byRoute = new Map();
+      try{
+        byRoute = item.company === "CTB"
+          ? await loadCtbETAs(stop.stop, item.routes)
+          : await loadKmbETAs(stop.stop, item.routes);
+      }catch(e){
+        continue;
+      }
 
-    if (!renderStops.length) continue;
+      const routeEntries = [...byRoute.entries()].filter(([_, arr]) => arr.length > 0);
+      if (!routeEntries.length) continue;
 
-    for (const { stop, byRoute } of renderStops) {
       const card = document.createElement("div");
       card.className = "stopcard";
 
@@ -271,15 +314,13 @@ async function renderGroup(containerId, group){
         </div>
       `;
 
-      const routesSorted = [...byRoute.keys()].sort((a,b) => item.routes.indexOf(a) - item.routes.indexOf(b));
+      routeEntries.sort((a,b) => item.routes.indexOf(a[0]) - item.routes.indexOf(b[0]));
 
-      for (const route of routesSorted) {
-        const arr = byRoute.get(route) || [];
-        if (!arr.length) continue;
-        const etas = arr.map(r => fmtEta(r.eta)).join(", ");
+      for (const [route, arr] of routeEntries) {
+        const etas = arr.map(etaText).join(", ");
         html += `
           <div class="route">
-            <div class="badge">${route}</div>
+            <div class="badge ${item.company === "CTB" ? "ctb" : "kmb"}">${route}</div>
             <div class="etas">${etas}</div>
           </div>
         `;
