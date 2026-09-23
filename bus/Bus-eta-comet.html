@@ -544,6 +544,53 @@ function render(targetResults) {
   }).join("");
 }
 
+async function refreshAll2() {
+  const button = document.getElementById("refreshBtn");
+  const status = document.getElementById("status");
+
+  button.disabled = true;
+  status.textContent = "更新中…";
+
+  try {
+    const targetResults = await Promise.all(
+      TARGETS.map(async target => {
+        const [kmbEtas, ctbEtas] = await Promise.all([
+          loadKmbEtasForTarget(target),
+          loadCtbEtasForTarget(target)
+        ]);
+
+        console.log(`[合併結果] ${target.stationName}`, {
+          kmbEtas,
+          ctbEtas
+        });
+
+        return {
+          target,
+          etas: [...kmbEtas, ...ctbEtas]
+        };
+      })
+    );
+
+/*
+    render(targetResults);
+
+    const now = new Date();
+    status.textContent =
+      `最後更新：${now.toLocaleTimeString("zh-HK", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      })}`;
+*/
+
+  } catch (error) {
+    console.error("更新失敗:", error);
+    status.textContent = "更新失敗，請稍後再試";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function refreshAll() {
   const button = document.getElementById("refreshBtn");
   const status = document.getElementById("status");
@@ -591,7 +638,7 @@ async function refreshAll() {
 
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
 
-refreshAll();
+refreshAll2();
 setTimeout(refreshAll, 1500);
 setInterval(refreshAll, AUTO_REFRESH_MS);
 
