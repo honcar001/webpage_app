@@ -151,7 +151,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> Carmond 的專屬巴士App1</h1>
+        <h1> Carmond 的專屬巴士App</h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -571,21 +571,9 @@ async function refreshAll2() {
       })
     );
 
-/*
-    render(targetResults);
-
-    const now = new Date();
-    status.textContent =
-      `最後更新：${now.toLocaleTimeString("zh-HK", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      })}`;
-*/
-
   } catch (error) {
     console.error("更新失敗:", error);
-    status.textContent = "jjjjj更新失敗，請稍後再試";
+    status.textContent = "更新中………………";
   } finally {
     button.disabled = false;
   }
