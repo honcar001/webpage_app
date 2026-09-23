@@ -151,7 +151,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> Carmond 的專屬巴士App</h1>
+        <h1> Carmond 專屬巴士App</h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -573,7 +573,7 @@ async function refreshAll2() {
 
   } catch (error) {
     console.error("更新失敗:", error);
-    status.textContent = "更新中………………";
+    status.textContent = "更新中………";
   } finally {
     button.disabled = false;
   }
@@ -627,7 +627,7 @@ async function refreshAll() {
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
 
 refreshAll2();
-setTimeout(refreshAll, 1500);
+setTimeout(refreshAll, 1000);
 setInterval(refreshAll, AUTO_REFRESH_MS);
 
 </script>
