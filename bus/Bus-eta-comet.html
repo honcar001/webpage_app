@@ -151,7 +151,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> Carmond 的專屬巴士App 1</h1>
+        <h1> Carmond 的專屬巴士App</h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -591,11 +591,10 @@ async function refreshAll() {
 
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
 
-setTimeout(() => {
-  refreshAll();
-}, 3000);
-
+refreshAll();
+setTimeout(refreshAll, 1500);
 setInterval(refreshAll, AUTO_REFRESH_MS);
+
 </script>
 </body>
 </html>
