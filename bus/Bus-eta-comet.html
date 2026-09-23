@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Carmond 的專屬巴士App</title>
+
+  <style>
+    :root{
+      --bg: #f2f4f7;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d9dee7;
+      --blue: #1769e0;
+      --green: #0b8f57;
+      --orange: #d76b00;
+      --red: #c0362c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(242, 244, 247, 0.72), rgba(242, 244, 247, 0.72)),
+        url("background.png") center center / cover no-repeat fixed;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft JhengHei", "PingFang HK", Arial, sans-serif;
+    }
+
+    .app {
+      max-width: 760px;
+      margin: auto;
+      padding: 14px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    #status {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 13px;
+      background: var(--blue);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: wait;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+      overflow: hidden;
+    }
+
+    .station-name {
+      padding: 12px 13px;
+      font-size: 18px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .route-row {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 8px;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+
+    .route-row:last-child {
+      border-bottom: 0;
+    }
+
+    .route {
+      color: var(--blue);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .eta {
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.45;
+    }
+
+    .eta.empty {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 400;
+    }
+
+    .provider {
+      margin-left: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 400;
+    }
+
+    .soon { color: var(--red); }
+    .normal { color: var(--green); }
+
+    @media (max-width: 560px) {
+      .app { padding: 10px; }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1> Carmond 的專屬巴士App </h1>
+        <div id="status">準備載入資料…</div>
+      </div>
+      <button id="refreshBtn">更新</button>
+    </header>
+
+    <section id="board" class="grid"></section>
+<i>Happy Birthday & Mid-Autumn Festival! 925 Special Edition</i>
+  </main>
+
+<script>
+/* =========================================================
+   設定區：只要改這裡，便可增減站點及路線
+   ========================================================= */
+
+const TARGETS = [
+  {
+    stationName: "土瓜灣街市",
+    aliases: ["土瓜灣街市", "TO KWA WAN MARKET"],
+    routes: ["107", "108"]
+  },
+  {
+    stationName: "怡和街",
+    aliases: ["怡和街", "YEE WO STREET"],
+    routes: ["108", "116"]
+  },
+  {
+    stationName: "景隆街",
+    aliases: ["景隆街", "CANAL ROAD EAST", "KING LUNG STREET"],
+    routes: ["106"]
+  }
+];
+
+/*
+ Citybus 要以 route + direction 取得 route-stop。
+
+ 方向設定：
+ - null = 兩個方向都試，最穩陣但 request 較多
+ - ["inbound"] / ["outbound"] = 只試指定方向
+
+ 初期建議保留 null，等你從 console 確認後，
+ 再改為正確方向以減少 API request。
+*/
+const CITYBUS_ROUTE_DIRECTIONS = {
+  "106": null,
+  "107": null,
+  "108": null,
+  "116": null
+};
+
+const KMB_STOP_API = "https://data.etabus.gov.hk/v1/transport/kmb/stop";
+const KMB_STOP_ETA_API = "https://data.etabus.gov.hk/v1/transport/kmb/stop-eta";
+
+const CTB_BASE_API = "https://rt.data.gov.hk/v2/transport/citybus";
+
+const AUTO_REFRESH_MS = 30000;
+const ETA_LIMIT = 3;
+
+
+/* =========================================================
+   共用工具
+   ========================================================= */
+
+function normaliseText(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[()（）,，.\-]/g, "");
+}
+
+function isSameStop(stopName, aliases) {
+  const name = normaliseText(stopName);
+
+  return aliases.some(alias => {
+    const target = normaliseText(alias);
+    return name.includes(target) || target.includes(name);
+  });
+}
+
+function formatMinute(minutes) {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  if (minutes <= 0) return "即將到站";
+  if (minutes === 1) return "1分鐘";
+  return `${minutes}分鐘`;
+}
+
+function getMinutesFromTime(timeText) {
+  if (!timeText) return null;
+
+  const target = new Date(timeText);
+  const now = new Date();
+
+  if (Number.isNaN(target.getTime())) return null;
+
+  return Math.max(0, Math.round((target.getTime() - now.getTime()) / 60000));
+}
+
+function getEtaLabel(etaTime, remark) {
+  const minutes = getMinutesFromTime(etaTime);
+
+  if (minutes !== null) {
+    return {
+      minutes,
+      text: formatMinute(minutes)
+    };
+  }
+
+  if (remark) {
+    return {
+      minutes: 9999,
+      text: remark
+    };
+  }
+
+  return null;
+}
+
+function uniqueAndSortEta(etaItems) {
+  const map = new Map();
+
+  etaItems.forEach(item => {
+    if (!item || !item.text) return;
+
+    const key = item.text;
+
+    if (!map.has(key) || item.minutes < map.get(key).minutes) {
+      map.set(key, item);
+    }
+  });
+
+  return [...map.values()]
+    .sort((a, b) => a.minutes - b.minutes)
+    .slice(0, ETA_LIMIT);
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${url}`);
+  }
+
+  return response.json();
+}
+
+
+/* =========================================================
+   KMB：先取得全部站，再按站名找 stop_id，再查 ETA
+   ========================================================= */
+
+let kmbStopsCache = null;
+
+async function getKmbStops() {
+  if (kmbStopsCache) return kmbStopsCache;
+
+  console.log("[KMB] 下載站點清單:", KMB_STOP_API);
+
+  const json = await fetchJson(KMB_STOP_API);
+  kmbStopsCache = json.data || [];
+
+  console.log("[KMB] 站點數量:", kmbStopsCache.length);
+
+  return kmbStopsCache;
+}
+
+async function loadKmbEtasForTarget(target) {
+  const allStops = await getKmbStops();
+
+  const matchedStops = allStops.filter(stop => {
+    return isSameStop(stop.name_tc, target.aliases) ||
+           isSameStop(stop.name_en, target.aliases);
+  });
+
+  console.log(`[KMB] ${target.stationName} 配對站點:`, matchedStops);
+
+  const results = [];
+
+  await Promise.all(
+    matchedStops.map(async stop => {
+      try {
+        const url = `${KMB_STOP_ETA_API}/${encodeURIComponent(stop.stop)}`;
+        const json = await fetchJson(url);
+        const rows = json.data || [];
+
+        rows
+          .filter(row => target.routes.includes(String(row.route)))
+          .forEach(row => {
+            const eta = getEtaLabel(row.eta, row.rmk_tc || row.rmk_en);
+
+            if (eta) {
+              results.push({
+                route: String(row.route),
+                provider: "KMB",
+                ...eta
+              });
+            }
+          });
+
+      } catch (error) {
+        console.warn(`[KMB] ETA 查詢失敗: ${stop.stop}`, error);
+      }
+    })
+  );
+
+  return results;
+}
+
+
+/* =========================================================
+   Citybus：
+   1. route-stop/{company}/{route}/{direction}
+   2. stop/{stop_id} 確認站名
+   3. eta/{company}/{stop_id}/{route}
+   ========================================================= */
+
+const ctbStopCache = new Map();
+
+async function getCtbStop(stopId) {
+  if (ctbStopCache.has(stopId)) {
+    return ctbStopCache.get(stopId);
+  }
+
+  const url = `${CTB_BASE_API}/stop/${encodeURIComponent(stopId)}`;
+  const json = await fetchJson(url);
+  const stop = json.data || null;
+
+  ctbStopCache.set(stopId, stop);
+  return stop;
+}
+
+async function getCtbRouteStops(route, direction) {
+  const url =
+    `${CTB_BASE_API}/route-stop/CTB/` +
+    `${encodeURIComponent(route)}/${encodeURIComponent(direction)}`;
+
+  console.log(`[CTB] route-stop request: ${url}`);
+
+  const json = await fetchJson(url);
+  const rows = json.data || [];
+
+  console.log(`[CTB] Route ${route}, ${direction}, stop count:`, rows.length);
+
+  return rows;
+}
+
+async function getCtbEtas(route, stopId) {
+  const url =
+    `${CTB_BASE_API}/eta/CTB/` +
+    `${encodeURIComponent(stopId)}/${encodeURIComponent(route)}`;
+
+  console.log(`[CTB] ETA request: ${url}`);
+
+  const json = await fetchJson(url);
+  return json.data || [];
+}
+
+async function loadCtbEtasForTarget(target) {
+  const results = [];
+
+  for (const route of target.routes) {
+    const directions =
+      CITYBUS_ROUTE_DIRECTIONS[route] || ["inbound", "outbound"];
+
+    for (const direction of directions) {
+      try {
+        const routeStops = await getCtbRouteStops(route, direction);
+
+        for (const routeStop of routeStops) {
+          const stopId = routeStop.stop;
+
+          if (!stopId) continue;
+
+          let stop;
+
+          try {
+            stop = await getCtbStop(stopId);
+          } catch (error) {
+            console.warn(`[CTB] 讀取 stop 失敗: ${stopId}`, error);
+            continue;
+          }
+
+          const stopNameTc = stop?.name_tc || "";
+          const stopNameEn = stop?.name_en || "";
+
+          const matched =
+            isSameStop(stopNameTc, target.aliases) ||
+            isSameStop(stopNameEn, target.aliases);
+
+          if (!matched) continue;
+
+          console.log(
+            `[CTB] 命中目標站: ${target.stationName}`,
+            {
+              route,
+              direction,
+              stopId,
+              stopNameTc,
+              stopNameEn
+            }
+          );
+
+          try {
+            const etaRows = await getCtbEtas(route, stopId);
+
+            etaRows.forEach(row => {
+              const eta = getEtaLabel(
+                row.eta,
+                row.rmk_tc || row.rmk_en
+              );
+
+              if (eta) {
+                results.push({
+                  route,
+                  provider: "CTB",
+                  ...eta
+                });
+              }
+            });
+
+          } catch (error) {
+            console.warn(
+              `[CTB] ETA 查詢失敗: route=${route}, stop=${stopId}`,
+              error
+            );
+          }
+        }
+
+      } catch (error) {
+        console.warn(
+          `[CTB] route-stop 查詢失敗: route=${route}, direction=${direction}`,
+          error
+        );
+      }
+    }
+  }
+
+  return results;
+}
+
+
+/* =========================================================
+   合併、畫面顯示
+   ========================================================= */
+
+function render(targetResults) {
+  const board = document.getElementById("board");
+
+  board.innerHTML = targetResults.map(({ target, etas }) => {
+    const routeRows = target.routes.map(route => {
+      const routeEtas = uniqueAndSortEta(
+        etas.filter(item => item.route === route)
+      );
+
+      if (routeEtas.length === 0) {
+        return `
+          <div class="route-row">
+            <div class="route">${route}</div>
+            <div class="eta empty">暫未有到站資料</div>
+          </div>
+        `;
+      }
+
+      const etaHtml = routeEtas.map(item => {
+        const css = item.minutes <= 3 ? "soon" : "normal";
+
+        return `
+          <span class="${css}">
+            ${item.text}
+            <span class="provider">${item.provider}</span>
+          </span>
+        `;
+      }).join(", ");
+
+      return `
+        <div class="route-row">
+          <div class="route">${route}</div>
+          <div class="eta">${etaHtml}</div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <article class="card">
+        <div class="station-name">${target.stationName}</div>
+        ${routeRows}
+      </article>
+    `;
+  }).join("");
+}
+
+async function refreshAll() {
+  const button = document.getElementById("refreshBtn");
+  const status = document.getElementById("status");
+
+  button.disabled = true;
+  status.textContent = "更新中…";
+
+  try {
+    const targetResults = await Promise.all(
+      TARGETS.map(async target => {
+        const [kmbEtas, ctbEtas] = await Promise.all([
+          loadKmbEtasForTarget(target),
+          loadCtbEtasForTarget(target)
+        ]);
+
+        console.log(`[合併結果] ${target.stationName}`, {
+          kmbEtas,
+          ctbEtas
+        });
+
+        return {
+          target,
+          etas: [...kmbEtas, ...ctbEtas]
+        };
+      })
+    );
+
+    render(targetResults);
+
+    const now = new Date();
+    status.textContent =
+      `最後更新：${now.toLocaleTimeString("zh-HK", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      })}`;
+
+  } catch (error) {
+    console.error("更新失敗:", error);
+    status.textContent = "更新失敗，請稍後再試";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+
+setTimeout(() => {
+  refreshAll();
+}, 300);
+
+setInterval(refreshAll, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>
