@@ -152,7 +152,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> 專屬巴士App 🚌 </h1>
+        <h1> 1專屬巴士App 🚌 </h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -555,10 +555,27 @@ async function refreshAll() {
   try {
     const targetResults = await Promise.all(
       TARGETS.map(async target => {
+
+console.log("開始 KMB", target.stationName);
+
+const kmbEtas = await loadKmbEtasForTarget(target);
+
+console.log("KMB 完成", target.stationName, kmbEtas);
+
+
+console.log("開始 CTB", target.stationName);
+
+const ctbEtas = await loadCtbEtasForTarget(target);
+
+console.log("CTB 完成", target.stationName, ctbEtas);
+
+
+/*
         const [kmbEtas, ctbEtas] = await Promise.all([
           loadKmbEtasForTarget(target),
           loadCtbEtasForTarget(target)
         ]);
+*/
 
         console.log(`[合併結果] ${target.stationName}`, {
           kmbEtas,
