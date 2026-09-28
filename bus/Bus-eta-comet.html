@@ -308,14 +308,26 @@ async function fetchJson(url) {
 let kmbStopsCache = null;
 
 async function getKmbStops() {
-  if (kmbStopsCache) return kmbStopsCache;
+
+  if (kmbStopsCache) {
+    return kmbStopsCache;
+  }
 
   console.log("[KMB] 下載站點清單:", KMB_STOP_API);
 
-  const json = await fetchJson(KMB_STOP_API);
-  kmbStopsCache = json.data || [];
+  kmbStopsCache = fetchJson(KMB_STOP_API)
+      .then(json => {
+    kmbStopsCache = json.data || [];
 
-  console.log("[KMB] 站點數量:", kmbStopsCache.length);
+    console.log( "[KMB] 站點數量:", kmbStopsCache.length
+
+    );
+    return kmbStopsCache;
+  })
+  .catch(error => {
+    kmbStopsCache = null;
+    throw error;
+  });
 
   return kmbStopsCache;
 }
@@ -545,41 +557,6 @@ function render(targetResults) {
   }).join("");
 }
 
-async function refreshAll2() {
-  const button = document.getElementById("refreshBtn");
-  const status = document.getElementById("status");
-
-  button.disabled = true;
-  status.textContent = "更新中…";
-
-  try {
-    const targetResults = await Promise.all(
-      TARGETS.map(async target => {
-        const [kmbEtas, ctbEtas] = await Promise.all([
-          loadKmbEtasForTarget(target),
-          loadCtbEtasForTarget(target)
-        ]);
-
-        console.log(`[合併結果] ${target.stationName}`, {
-          kmbEtas,
-          ctbEtas
-        });
-
-        return {
-          target,
-          etas: [...kmbEtas, ...ctbEtas]
-        };
-      })
-    );
-
-  } catch (error) {
-    console.error("更新失敗:", error);
-    status.textContent = "更新中………";
-  } finally {
-    button.disabled = false;
-  }
-}
-
 async function refreshAll() {
   const button = document.getElementById("refreshBtn");
   const status = document.getElementById("status");
@@ -590,10 +567,14 @@ async function refreshAll() {
   try {
     const targetResults = await Promise.all(
       TARGETS.map(async target => {
-        const [kmbEtas, ctbEtas] = await Promise.all([
-          loadKmbEtasForTarget(target),
-          loadCtbEtasForTarget(target)
-        ]);
+
+        console.log("開始 KMB", target.stationName);
+        const kmbEtas = await loadKmbEtasForTarget(target);
+        console.log("KMB 完成", target.stationName, kmbEtas);
+
+        console.log("開始 CTB", target.stationName);
+        const ctbEtas = await loadCtbEtasForTarget(target);
+        console.log("CTB 完成", target.stationName, ctbEtas);
 
         console.log(`[合併結果] ${target.stationName}`, {
           kmbEtas,
@@ -627,8 +608,7 @@ async function refreshAll() {
 
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
 
-refreshAll2();
-setTimeout(refreshAll, 1500);
+refreshAll();
 setInterval(refreshAll, AUTO_REFRESH_MS);
 
 </script>
