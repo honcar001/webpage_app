@@ -152,7 +152,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> 專屬巴士App 🚌 </h1>
+        <h1> 2專屬巴士App 🚌 </h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -308,16 +308,13 @@ async function fetchJson(url) {
 let kmbStopsCache = null;
 
 async function getKmbStops() {
-  if (kmbStopsCache) return kmbStopsCache;
+
+  if (kmbStopsCache) {
+    return kmbStopsCache;
+  }
 
   console.log("[KMB] 下載站點清單:", KMB_STOP_API);
 
-/*
-  const json = await fetchJson(KMB_STOP_API);
-  kmbStopsCache = json.data || [];
-
-  console.log("[KMB] 站點數量:", kmbStopsCache.length);
-*/
   kmbStopsCache = fetchJson(KMB_STOP_API)
     .then(json => {
       kmbStopsCache = json.data || [];
