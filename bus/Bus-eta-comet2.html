@@ -152,7 +152,7 @@
   <main class="app">
     <header>
       <div>
-        <h1> Carmond 專屬巴士App 🚌 </h1>
+        <h1> 1Carmond 專屬巴士App 🚌 </h1>
         <div id="status">準備載入資料…</div>
       </div>
       <button id="refreshBtn">更新</button>
@@ -560,10 +560,13 @@ async function refreshAll() {
           loadCtbEtasForTarget(target)
         ]);
 
+status.textContent = "BP 1";
+
         console.log(`[合併結果] ${target.stationName}`, {
           kmbEtas,
           ctbEtas
         });
+status.textContent = "BP 2";
 
         return {
           target,
@@ -571,16 +574,20 @@ async function refreshAll() {
         };
       })
     );
+status.textContent = "BP 3";
 
     render(targetResults);
+status.textContent = "BP 4";
 
     const now = new Date();
+status.textContent = "BP 5";
     status.textContent =
       `最後更新：${now.toLocaleTimeString("zh-HK", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit"
       })}`;
+status.textContent = "BP 6";
 
   } catch (error) {
     console.error("更新失敗:", error);
