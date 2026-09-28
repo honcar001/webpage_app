@@ -134,6 +134,12 @@
     .soon { color: var(--red); }
     .normal { color: var(--green); }
 
+    .unit {
+      font-size: 0.72em;
+      font-weight: 500;
+      margin-left: 1px;
+    }
+
     @media (max-width: 560px) {
       .app { padding: 10px; }
 
@@ -242,8 +248,8 @@ function formatMinute(minutes) {
   }
 
   if (minutes <= 0) return "即將到站";
-  if (minutes === 1) return "1分鐘";
-  return `${minutes}分鐘`;
+  if (minutes === 1) return `1<span class="unit">分鐘</span>`;
+  return `${minutes}<span class="unit">分鐘</span>`;
 }
 
 function getMinutesFromTime(timeText) {
