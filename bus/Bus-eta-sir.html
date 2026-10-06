@@ -1,4 +1,5 @@
 <!doctype html>
+<!--date: 2026-10-06 14:55-->
 <html lang="zh-HK">
 <head>
   <meta charset="utf-8" />
@@ -225,7 +226,37 @@ const ETA_LIMIT = 3;
 /* =========================================================
    共用工具
    ========================================================= */
+// 只快取站點配對，ETA 照常即時查詢。快取有效期為 7 日。
+const STOP_CACHE_PREFIX = "carmond-bus-stops-v1:";
+const STOP_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const STOP_CACHE_SIGNATURE = JSON.stringify({ TARGETS, CITYBUS_ROUTE_DIRECTIONS });
 
+function readStopCache(key) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(STOP_CACHE_PREFIX + key));
+    if (cache && cache.signature === STOP_CACHE_SIGNATURE &&
+        Number.isFinite(cache.savedAt) &&
+        Date.now() - cache.savedAt < STOP_CACHE_TTL &&
+        Array.isArray(cache.data)) {
+      console.log("[站點快取] 使用已儲存資料:", key);
+      return cache.data;
+    }
+  } catch (error) {
+    console.warn("[站點快取] 無法讀取，改用 API", error);
+  }
+  return null;
+}
+
+function writeStopCache(key, data) {
+  try {
+    localStorage.setItem(STOP_CACHE_PREFIX + key, JSON.stringify({
+      signature: STOP_CACHE_SIGNATURE, savedAt: Date.now(), data
+    }));
+  } catch (error) {
+    console.warn("[站點快取] 無法儲存，不影響 ETA 查詢", error);
+  }
+}
+  
 function normaliseText(value) {
   return String(value || "")
     .toUpperCase()
@@ -324,11 +355,24 @@ async function getKmbStops() {
     return kmbStopsCache;
   }
 
+  const savedStops = readStopCache("kmb-targets");
+  if (savedStops) {
+    kmbStopsCache = savedStops;
+    return kmbStopsCache;
+  }
+  
   console.log("[KMB] 下載站點清單:", KMB_STOP_API);
 
   kmbStopsCache = fetchJson(KMB_STOP_API)
       .then(json => {
-    kmbStopsCache = json.data || [];
+    if (!Array.isArray(json.data) || !json.data.length) {
+      throw new Error("KMB 站點清單不完整");
+    }
+    kmbStopsCache = json.data.filter(stop => TARGETS.some(target =>
+      isSameStop(stop.name_tc, target.aliases) ||
+      isSameStop(stop.name_en, target.aliases)
+    ));
+    if (kmbStopsCache.length) writeStopCache("kmb-targets", kmbStopsCache);
 
     console.log( "[KMB] 站點數量:", kmbStopsCache.length
 
@@ -434,6 +478,39 @@ async function getCtbEtas(route, stopId) {
   return json.data || [];
 }
 
+async function getCtbMatchedRouteStops(target, route, direction) {
+  const key = `ctb:${target.stationName}:${route}:${direction}`;
+  const saved = readStopCache(key);
+  if (saved) {
+    saved.forEach(item => ctbStopCache.set(item.stop, item.details));
+    return saved;
+  }
+
+  const rows = await getCtbRouteStops(route, direction);
+  const matched = [];
+  let complete = rows.length > 0;
+  for (const row of rows) {
+    if (!row.stop) { complete = false; continue; }
+    try {
+      const stop = await getCtbStop(row.stop);
+      if (!stop || (!stop.name_tc && !stop.name_en)) {
+        complete = false;
+        continue;
+      }
+      if (isSameStop(stop.name_tc || "", target.aliases) ||
+          isSameStop(stop.name_en || "", target.aliases)) {
+        matched.push({ ...row, details: stop });
+      }
+    } catch (error) {
+      complete = false;
+      console.warn(`[CTB] 讀取 stop 失敗: ${row.stop}`, error);
+    }
+  }
+  // 完整掃描後才儲存；空配對亦可儲存，避免重掃沒有目標站的方向。
+  if (complete) writeStopCache(key, matched);
+  return matched;
+}
+  
 async function loadCtbEtasForTarget(target) {
   const results = [];
 
@@ -443,8 +520,8 @@ async function loadCtbEtasForTarget(target) {
 
     for (const direction of directions) {
       try {
-        const routeStops = await getCtbRouteStops(route, direction);
-
+        const routeStops = await getCtbMatchedRouteStops(target, route, direction);
+        
         for (const routeStop of routeStops) {
           const stopId = routeStop.stop;
 
@@ -572,6 +649,7 @@ async function refreshAll() {
   const button = document.getElementById("refreshBtn");
   const status = document.getElementById("status");
 
+  if (button.disabled) return; // 首次搜尋較慢時，避免自動更新重複啟動。
   button.disabled = true;
   status.textContent = "更新中…";
 
